@@ -1,0 +1,36 @@
+
+jaeger:
+  enabled: false
+
+kiali:
+  enabled: false
+
+clusterAuditor:
+  enabled: false
+
+gatekeeper:
+  enabled: false
+
+logging:
+  enabled: false
+
+eckoperator:
+  enabled: false
+
+fluentbit:
+  enabled: false
+
+promtail:
+  enabled: false
+
+loki:
+  enabled: false
+
+tempo:
+  enabled: false
+
+monitoring:
+  enabled: true
+
+twistlock:
+  enabled: false

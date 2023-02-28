@@ -1,0 +1,95 @@
+#!/bin/bash
+
+usage() {
+  cat << EOF # remove the space between << and EOF, this is due to web plugin issue
+Usage: $(basename "${BASH_SOURCE[0]}") [-h] [-v] [-f] -p param_value arg1 [arg2...]
+
+Script description here.
+
+Available options:
+
+-h, --help                                           Print this help and exit
+-v, --verbose                                        Print script debug info
+-c, --create [host] [nodes] [package]                Create a new cluster
+-r, --redeploy-pacakge [package]                     Delete HelmRelease and reinstall BigBang
+EOF
+  exit
+}
+
+parse_params() {
+  nodes="1"
+  host="192.168.1.163"
+  package="base"
+  user="rob"
+  while [[ "$#" -gt 0 ]]
+  do case $1 in
+      -n|--nodes) nodes="$2"
+      shift;;
+      -h|--host) host="$2"
+      shift;;
+      -p|--package) package="$2"
+      shift;;
+      -u|--user) user="$2"
+      shift;;
+      *) echo "Unknown parameter passed: $1"
+      exit 1;;
+  esac
+  shift
+  done
+
+  main ${host} ${nodes} ${package} ${user}
+
+  return 0
+}
+
+function get_remote() {
+  SERVER_IP=$2
+  NODES=$3 
+  CLUSTER=$1
+  USER=$4
+
+  ssh $USER@$SERVER_IP <<- ENDSSH
+    k3d cluster delete -a
+    k3d cluster create \
+      --agents $NODES \
+      --k3s-arg "--tls-san=$SERVER_IP@server:*" \
+      --k3s-arg "--disable=traefik@server:*" \
+      --port 80:80@loadbalancer \
+      --port 443:443@loadbalancer \
+      --api-port 6443 \
+      $CLUSTER
+ENDSSH
+
+  ssh $USER@$SERVER_IP "k3d kubeconfig get $CLUSTER" | sed -e s/0.0.0.0/$SERVER_IP/g > "${DRIVER_BIGBANG_DIR}/kubeconfig.yaml"
+  echo "export KUBECONFIG=${DRIVER_BIGBANG_DIR}/kubeconfig.yaml"
+}
+
+function install() {
+  $BIGBANG_DIR/scripts/install_flux.sh -u $REGISTRY1_USERNAME -p $REGISTRY1_PASSWORD
+  PACKAGE=$1
+
+  helm upgrade --install bigbang $BIGBANG_DIR/chart \
+    --values https://repo1.dso.mil/platform-one/big-bang/bigbang/-/raw/master/chart/ingress-certs.yaml \
+    --set=registryCredentials.username=$REGISTRY1_USERNAME \
+    --set=registryCredentials.password=$REGISTRY1_PASSWORD \
+    --values ${DRIVER_BIGBANG_DIR}/shared/disable-dev.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/${PACKAGE}/values.yaml \
+    --namespace=bigbang --create-namespace
+}
+
+function reinstall_packge() {
+  flux delete helmrelease $1 -s -n bigbang
+  install
+}
+
+function main() {
+  echo "Creating Cluster: $3"
+  
+  # create cluster on remote host, spit out k3s config to ./remotekubeconfig.yaml
+  get_remote $3 $1 $2 $4
+
+  # probably need to set kubeconfig (assumes to be set)
+  install $3
+}
+
+parse_params "$@"
