@@ -30,7 +30,22 @@ tempo:
   enabled: false
 
 monitoring:
-  enabled: true
+  enabled: false
 
 twistlock:
+  enabled: false
+
+neuvector:
+  enabled: false
+  values:
+    k3s:
+      enabled: true
+
+kyvernoReporter:
+  enabled: false
+
+kyvernoPolicies:
+  enabled: false
+
+kyverno:
   enabled: false

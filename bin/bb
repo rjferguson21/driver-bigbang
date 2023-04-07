@@ -31,6 +31,22 @@ parse_params() {
       shift;;
       -u|--user) user="$2"
       shift;;
+      -i|--install)
+      install "${package}"
+      exit 0
+      shift;;
+      -t|--template)
+      template "${package}"
+      exit 0
+      shift;;
+      -t|--template)
+      template "${package}"
+      exit 0
+      shift;;
+      -r|--reinstall-package)
+      reinstall_packge "${package}"
+      exit 0
+      shift;;
       *) echo "Unknown parameter passed: $1"
       exit 1;;
   esac
@@ -42,15 +58,19 @@ parse_params() {
   return 0
 }
 
-function get_remote() {
+get_remote() {
   SERVER_IP=$2
   NODES=$3 
   CLUSTER=$1
   USER=$4
 
+  # copy over k3d config for proxy
+  scp ${DRIVER_BIGBANG_DIR}/shared/k3d-config.yaml $USER@$SERVER_IP:~
+
   ssh $USER@$SERVER_IP <<- ENDSSH
     k3d cluster delete -a
     k3d cluster create \
+      --config k3d-config.yaml \
       --agents $NODES \
       --k3s-arg "--tls-san=$SERVER_IP@server:*" \
       --k3s-arg "--disable=traefik@server:*" \
@@ -64,7 +84,7 @@ ENDSSH
   echo "export KUBECONFIG=${DRIVER_BIGBANG_DIR}/kubeconfig.yaml"
 }
 
-function install() {
+install() {
   $BIGBANG_DIR/scripts/install_flux.sh -u $REGISTRY1_USERNAME -p $REGISTRY1_PASSWORD
   PACKAGE=$1
 
@@ -73,16 +93,32 @@ function install() {
     --set=registryCredentials.username=$REGISTRY1_USERNAME \
     --set=registryCredentials.password=$REGISTRY1_PASSWORD \
     --values ${DRIVER_BIGBANG_DIR}/shared/disable-dev.yaml \
-    --values ${DRIVER_BIGBANG_DIR}/${PACKAGE}/values.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/shared/remove-limits.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/shared/faster.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/overrides/${PACKAGE}/values.yaml \
     --namespace=bigbang --create-namespace
 }
 
-function reinstall_packge() {
-  flux delete helmrelease $1 -s -n bigbang
-  install
+template() {
+  PACKAGE=$1
+
+  helm template bigbang $BIGBANG_DIR/chart \
+    --values https://repo1.dso.mil/platform-one/big-bang/bigbang/-/raw/master/chart/ingress-certs.yaml \
+    --set=registryCredentials.username=$REGISTRY1_USERNAME \
+    --set=registryCredentials.password=$REGISTRY1_PASSWORD \
+    --values ${DRIVER_BIGBANG_DIR}/shared/disable-dev.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/shared/remove-limits.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/shared/faster.yaml \
+    --values ${DRIVER_BIGBANG_DIR}/overrides/${PACKAGE}/values.yaml \
+    --namespace=bigbang --create-namespace
 }
 
-function main() {
+reinstall_packge() {
+  flux delete helmrelease $1 -s -n bigbang
+  install $1
+}
+
+main() {
   echo "Creating Cluster: $3"
   
   # create cluster on remote host, spit out k3s config to ./remotekubeconfig.yaml
