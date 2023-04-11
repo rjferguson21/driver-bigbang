@@ -1,3 +1,7 @@
+flux:
+  timeout: 10m
+  interval: 5s
+
 istio:
   values:
     values:

@@ -1,0 +1,46 @@
+apiVersion: k3d.io/v1alpha4
+kind: Simple
+metadata:
+  name: $CLUSTER 
+agents: $NODES
+kubeAPI: # same as `--api-port myhost.my.domain:6445` (where the name would resolve to 127.0.0.1)
+  hostIP: $SERVER_IP # where the Kubernetes API will be listening on
+  hostPort: "6443" # where the Kubernetes API listening port will be mapped to on your host systemkllk
+ports:
+  - port: 443:443 
+    nodeFilters:
+      - loadbalancer
+  - port: 80:80 
+    nodeFilters:
+      - loadbalancer
+options:
+  k3s: # options passed on to K3s itself
+    extraArgs: # additional arguments passed to the `k3s server|agent` command; same as `--k3s-arg`
+      - arg: --tls-san=$SERVER_IP
+        nodeFilters:
+          - server:*
+      - arg: --disable=traefik
+        nodeFilters:
+          - server:*
+      # - arg: --disable=servicelb
+      #   nodeFilters:
+      #     - server:*
+registries:
+  create:
+    name: repo1
+    proxy:
+      remoteURL: https://registry1.dso.mil
+      username: $REGISTRY1_USERNAME
+      password: $REGISTRY1_PASSWORD
+    volumes:
+      - /home/rob/reg:/var/lib/registry
+  config: | 
+    mirrors:
+      "registry1.dso.mil":
+        endpoint:
+          - http://repo1:5000
+    configs:
+      registry1.dso.mil:
+        auth:
+          username: $REGISTRY1_USERNAME
+          password: $REGISTRY1_PASSWORD
