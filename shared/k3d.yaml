@@ -13,6 +13,11 @@ ports:
   - port: 80:80 
     nodeFilters:
       - loadbalancer
+volumes: # repeatable flags are represented as YAML lists
+  - volume: /etc/machine-id:/etc/machine-id
+    nodeFilters:
+      - server:0
+      - agent:*
 options:
   k3s: # options passed on to K3s itself
     extraArgs: # additional arguments passed to the `k3s server|agent` command; same as `--k3s-arg`

@@ -84,6 +84,7 @@ get_values() {
   params+=(--set=registryCredentials.username=$REGISTRY1_USERNAME)
   params+=(--set=registryCredentials.password=$REGISTRY1_PASSWORD)
   params+=(--values ${DRIVER_BIGBANG_DIR}/shared/disable-dev.yaml)
+  params+=(--values ${DRIVER_BIGBANG_DIR}/shared/policy-exclusions.yaml)
 
   # remove limits
   if [[ $nolimits == true ]]; then

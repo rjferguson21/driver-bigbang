@@ -11,10 +11,10 @@ clusterAuditor:
 gatekeeper:
   enabled: false
 
-logging:
+elasticsearchKibana:
   enabled: false
 
-eckoperator:
+eckOperator:
   enabled: false
 
 fluentbit:
