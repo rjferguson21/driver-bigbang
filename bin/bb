@@ -1,6 +1,7 @@
 #!/bin/bash
 
 sso=false
+nolimits=false
 
 usage() {
   cat << EOF # remove the space between << and EOF, this is due to web plugin issue
@@ -28,6 +29,8 @@ parse_params() {
       -n|--nodes) nodes="$2"
       shift;;
       -s|--sso) sso=true
+      ;;
+      -l|--no-limits) nolimits=true
       ;;
       -h|--host) host="$2"
       shift;;
@@ -75,8 +78,6 @@ get_remote() {
 }
 
 get_values() {
-  local nolimits=true
-
   params=()
 
   params+=(--namespace=bigbang --create-namespace)
