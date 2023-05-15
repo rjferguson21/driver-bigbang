@@ -2,6 +2,11 @@
 
 sso=false
 nolimits=false
+metallb=false
+bbinstall=false
+
+# SHARED_DIR=shared-v1
+SHARED_DIR=shared
 
 usage() {
   cat << EOF # remove the space between << and EOF, this is due to web plugin issue
@@ -31,6 +36,8 @@ parse_params() {
       -s|--sso) sso=true
       ;;
       -l|--no-limits) nolimits=true
+      ;;
+      -m|--metal-lb) metallb=true
       ;;
       -h|--host) host="$2"
       shift;;
@@ -70,11 +77,17 @@ get_remote() {
   export NODES=$3 
   export CLUSTER=$1
   export USER=$4
+  export METAL_LB=$5
 
-  envsubst < $DRIVER_BIGBANG_DIR/shared/k3d.yaml | ssh $USER@$SERVER_IP 'cat > k3d.yaml'
+  if [[ $METAL_LB == true ]]; then
+    envsubst < $DRIVER_BIGBANG_DIR/${SHARED_DIR}/k3d.yaml | yq 'del(.ports)' | ssh $USER@$SERVER_IP 'cat > k3d.yaml'
+  else
+    envsubst < $DRIVER_BIGBANG_DIR/${SHARED_DIR}/k3d.yaml | ssh $USER@$SERVER_IP 'cat > k3d.yaml'
+  fi
 
   ssh $USER@$SERVER_IP "k3d cluster delete -a && k3d cluster create --config k3d.yaml"
   ssh $USER@$SERVER_IP "k3d kubeconfig get $CLUSTER" > "${DRIVER_BIGBANG_DIR}/overrides/${CLUSTER}/kubeconfig.yaml"
+  ssh $USER@$SERVER_IP "k3d kubeconfig get $CLUSTER" > "${DRIVER_BIGBANG_DIR}/kubeconfig.yaml"
 }
 
 get_values() {
@@ -84,12 +97,12 @@ get_values() {
   params+=(--values https://repo1.dso.mil/platform-one/big-bang/bigbang/-/raw/master/chart/ingress-certs.yaml)
   params+=(--set=registryCredentials.username=$REGISTRY1_USERNAME)
   params+=(--set=registryCredentials.password=$REGISTRY1_PASSWORD)
-  params+=(--values ${DRIVER_BIGBANG_DIR}/shared/disable-dev.yaml)
-  params+=(--values ${DRIVER_BIGBANG_DIR}/shared/policy-exclusions.yaml)
+  params+=(--values ${DRIVER_BIGBANG_DIR}/${SHARED_DIR}/disable-dev.yaml)
+  params+=(--values ${DRIVER_BIGBANG_DIR}/${SHARED_DIR}/policy-exclusions.yaml)
 
   # remove limits
   if [[ $nolimits == true ]]; then
-    params+=(--values ${DRIVER_BIGBANG_DIR}/shared/remove-limits.yaml)
+    params+=(--values ${DRIVER_BIGBANG_DIR}/${SHARED_DIR}/remove-limits.yaml)
   fi
 
   # enable sso
@@ -107,7 +120,22 @@ install() {
   $BIGBANG_DIR/scripts/install_flux.sh -u $REGISTRY1_USERNAME -p $REGISTRY1_PASSWORD
   PACKAGE=$1
 
-  helm upgrade --install bigbang $BIGBANG_DIR/chart $(get_values)
+  if [[ $metallb == true ]]; then
+    echo "metalb pre-install"
+    metallb_install
+  fi
+
+  if [[ $bbinstall == true ]]; then
+    echo "metalb pre-install"
+    echo "installing BB"
+    helm upgrade --install bigbang $BIGBANG_DIR/chart $(get_values)
+  fi
+
+  if [[ -f ${DRIVER_BIGBANG_DIR}/overrides/${PACKAGE}/post-install.sh ]]
+  then
+    echo "Running post install"
+    ${DRIVER_BIGBANG_DIR}/overrides/${PACKAGE}/post-install.sh
+  fi
 }
 
 template() {
@@ -127,10 +155,16 @@ new_override_packge() {
   bby --package=$PACKAGE --values=$BIGBANG_DIR/chart/values.yaml > ${DRIVER_BIGBANG_DIR}/overrides/${PACKAGE}/values.yaml
 }
 
+metallb_install() {
+  kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.13.9/config/manifests/metallb-native.yaml
+  kubectl wait --for=condition=available --timeout 120s -n metallb-system deployment controller
+  kubectl apply -f ${DRIVER_BIGBANG_DIR}/${SHARED_DIR}/metal.yaml
+}
+
 main() {
   echo "Creating Cluster: $3"
   
-  get_remote $3 $1 $2 $4
+  get_remote $3 $1 $2 $4 $metallb
 
   install $3
 }

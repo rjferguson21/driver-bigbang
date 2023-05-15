@@ -23,10 +23,6 @@ volumes: # repeatable flags are represented as YAML lists
     nodeFilters:
       - server:0
       - agent:*
-  - volume: /home/rob/cypress:/cypress
-    nodeFilters:
-      - server:0
-      - agent:*
 options:
   k3d:
     disableLoadbalancer: $METAL_LB
@@ -36,9 +32,6 @@ options:
         nodeFilters:
           - server:*
       - arg: --disable=traefik
-        nodeFilters:
-          - server:*
-      - arg: --disable=servicelb
         nodeFilters:
           - server:*
 registries:
